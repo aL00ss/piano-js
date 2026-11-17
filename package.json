@@ -1,0 +1,16 @@
+{
+  "name": "piano-js",
+  "version": "2.0.0",
+  "description": "Piano JS : un piano de 88 touches en JavaScript (Tone.js) qui joue seul sept grands classiques. Projet d'Alexandre Besnier.",
+  "type": "module",
+  "private": true,
+  "author": "Alexandre Besnier",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/piano.test.js",
+    "start": "npx --yes http-server -p 8080 -c-1 ."
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Piano JS — un piano en JavaScript</title>
+  <meta name="description" content="Un piano de 88 touches jouable au clavier, à la souris et au doigt, qui interprète tout seul sept grands classiques. Écrit en JavaScript avec Tone.js par Alexandre Besnier.">
+  <meta name="author" content="Alexandre Besnier">
+  <meta name="theme-color" content="#0c0d12">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="js">
+  <header class="entete">
+    <h1 class="marque">
+      <span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>Piano <b>JS</b></span>
+    </h1>
+    <p class="statut" id="statut" role="status" aria-live="polite">
+      <span class="statut-point" aria-hidden="true"></span>
+      <span id="statut-texte">Chargement du piano…</span>
+    </p>
+  </header>
+
+  <main>
+    <h2 class="sr" id="titre-morceaux">Morceaux</h2>
+    <ol class="cartes" id="cartes" aria-labelledby="titre-morceaux"></ol>
+
+    <div class="meuble">
+      <div class="feutre" aria-hidden="true"></div>
+      <div class="clavier" id="clavier" role="application" aria-label="Clavier de piano, 88 touches"></div>
+      <div class="apercu" id="apercu" hidden>
+        <canvas id="apercu-canvas" aria-hidden="true"></canvas>
+        <div class="apercu-fenetre" id="apercu-fenetre"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="pied">
+    <p class="aide">
+      Clavier <button class="disposition" id="disposition" type="button" title="Changer la disposition du clavier">AZERTY</button>&nbsp;:
+      <kbd id="aide-bas">W</kbd>–<kbd id="aide-bas-fin">!</kbd> et <kbd id="aide-haut">A</kbd>–<kbd id="aide-haut-fin">$</kbd>
+      · <kbd>Espace</kbd> pédale · <kbd>←</kbd> <kbd>→</kbd> octave · <kbd>Échap</kbd> arrêt
+    </p>
+    <p>Conçu et développé par <strong>Alexandre Besnier</strong> · <a href="https://github.com/aL00ss/piano-js" rel="noopener">code source</a></p>
+    <p class="sources">Partitions&nbsp;: <a href="https://www.mutopiaproject.org" rel="noopener">Mutopia Project</a> (domaine public ; CC BY-SA 2.5 pour la Sonate au clair de lune). Échantillons&nbsp;: Salamander Grand Piano, Alexander Holm (CC BY 3.0). Son&nbsp;: <a href="https://tonejs.github.io" rel="noopener">Tone.js</a>.</p>
+  </footer>
+
+  <script src="vendor/Tone.js"></script>
+  <script src="vendor/Midi.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
