@@ -3,6 +3,7 @@
 import { BASE_DEFAUT, caractere, decalerBase, detecterDisposition, etiquettes, noteDuCode } from "./clavier-ordinateur.js";
 import { Lecteur } from "./lecteur.js";
 import { depuisToneMidi, indiceA, touchesEnfoncees } from "./morceau.js";
+import { brancherRecherche } from "./recherche.js";
 import { Moteur } from "./moteur.js";
 import { Piano } from "./piano.js";
 import { NB_BLANCHES, disposition, formaterDuree, touche } from "./theorie.js";
@@ -84,10 +85,12 @@ piano.addEventListener("relache", (e) => relacher(e.detail.midi));
 // --------------------------------------------------------- clavier de l'ordinateur
 
 const surUneCommande = (cible) => cible instanceof Element && cible.matches("button, a");
-const surUneGlissiere = (cible) => cible instanceof HTMLInputElement;
+const surUneGlissiere = (cible) => cible instanceof HTMLInputElement && cible.type === "range";
+const dansUnChamp = (cible) => cible instanceof HTMLInputElement && cible.type !== "range";
 
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (dansUnChamp(e.target)) return; // on écrit dans la recherche : les touches ne jouent pas
   if (e.code === "Escape") {
     lecteur.arreter();
     return;
@@ -233,11 +236,17 @@ async function choisir(fiche) {
     lecteur.reprendre();
     return;
   }
-  const carte = document.querySelector(`.carte[data-id="${fiche.id}"]`);
-  carte.classList.add("charge");
+  // un morceau trouvé en ligne n'a pas de carte : la barre de lecture et le statut suffisent
+  const carte = document.querySelector(`.carte[data-id="${CSS.escape(fiche.id)}"]`);
+  carte?.classList.add("charge");
+  if (fiche.enLigne) $("#statut-texte").textContent = `Chargement de « ${fiche.titre} »…`;
   try {
     const [morceau] = await Promise.all([chargerMorceau(fiche), pianoPret]);
     if (demande !== etat.demande) return;
+    if (!morceau.notes.length) {
+      $("#statut-texte").textContent = "Ce fichier ne contient aucune note jouable au piano.";
+      return;
+    }
     // Sans sortie audio utilisable, on ne reste pas figé : le morceau est mis en attente
     // et démarrera tout seul dès que le son sera revenu.
     if (!(await essayerLeSon(2000))) {
@@ -253,7 +262,7 @@ async function choisir(fiche) {
     console.error(erreur);
     $("#statut-texte").textContent = "Impossible de charger ce morceau.";
   } finally {
-    carte.classList.remove("charge");
+    carte?.classList.remove("charge");
   }
 }
 
@@ -548,6 +557,11 @@ async function demarrer() {
   const reponse = await fetch("midi/catalogue.json");
   etat.catalogue = await reponse.json();
   $("#cartes").replaceChildren(...etat.catalogue.map(creerCarte));
+  // Recherche en ligne : un résultat choisi est joué aussitôt, comme un clic sur une carte.
+  brancherRecherche("#recherche", (fiche) => {
+    reveillerLeSon(); // le choix se fait par un clic ou Entrée : le son peut démarrer
+    choisir(fiche);
+  });
   await pianoPret;
 }
 

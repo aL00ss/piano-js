@@ -1,11 +1,16 @@
 // Transforme un fichier MIDI analysé en une suite de notes prêtes à jouer.
 // Fonctions pures : la lecture du fichier binaire est confiée à @tonejs/midi.
 
+import { NOTE_MAX, NOTE_MIN } from "./theorie.js";
+
 const CONTROLEUR_PEDALE = 64;
+const CANAL_PERCUSSIONS = 9; // canal 10 en General MIDI : la batterie, injouable au piano
 
 /**
  * Convertit l'objet produit par @tonejs/midi en notes simples.
- * La première piste qui contient des notes est la main droite.
+ * La première piste qui contient des notes est la main droite. Les fichiers trouvés en ligne
+ * peuvent contenir d'autres instruments : la batterie et les notes hors des 88 touches sont
+ * ignorées, tout le reste est joué au piano.
  */
 export function depuisToneMidi(midi) {
   const notes = [];
@@ -15,8 +20,10 @@ export function depuisToneMidi(midi) {
     for (const cc of piste.controlChanges?.[CONTROLEUR_PEDALE] ?? []) {
       pedale.push({ temps: cc.time, enfoncee: cc.value >= 0.5 });
     }
-    if (!piste.notes.length) continue;
-    for (const n of piste.notes) {
+    if (piste.channel === CANAL_PERCUSSIONS || piste.instrument?.percussion) continue;
+    const jouables = piste.notes.filter((n) => n.midi >= NOTE_MIN && n.midi <= NOTE_MAX);
+    if (!jouables.length) continue;
+    for (const n of jouables) {
       notes.push({ midi: n.midi, temps: n.time, duree: n.duration, velocite: n.velocity, main });
     }
     main = Math.min(1, main + 1);

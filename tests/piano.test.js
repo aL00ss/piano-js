@@ -6,6 +6,7 @@ import { BASE_DEFAUT, caractere, decalerBase, detecterDisposition, etiquettes, n
 import { Lecteur } from "../js/lecteur.js";
 import { depuisToneMidi, indiceA, intervallesPedale, pedaleA, preparerMorceau, touchesEnfoncees } from "../js/morceau.js";
 import { gainDeVelocite } from "../js/moteur.js";
+import { chercher, echapper, nomLisible, versFiche } from "../js/recherche.js";
 import { NOTE_MAX, NOTE_MIN, disposition, estNoire, formaterDuree, frequence, nomAnglais, nomFrancais, toucheSous } from "../js/theorie.js";
 
 const racine = new URL("../", import.meta.url);
@@ -311,4 +312,50 @@ test("pause et reprise sont sans effet quand rien ne joue", () => {
   lecteur.pause();
   lecteur.reprendre();
   assert.equal(lecteur.etat, "arret");
+});
+
+// ------------------------------------------------------------------- recherche
+
+test("les noms de fichiers trouvés en ligne deviennent des titres lisibles", () => {
+  assert.equal(nomLisible("chopin-ballade_1.mid"), "chopin ballade 1");
+  assert.equal(nomLisible("Clair-De-Lune.MIDI"), "Clair De Lune");
+  assert.equal(nomLisible(".mid"), "Sans titre");
+});
+
+test("les noms venus d'Internet sont échappés avant affichage", () => {
+  assert.equal(echapper('<img src=x onerror="alert(1)">'), "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+  assert.equal(echapper("Rock & roll"), "Rock &amp; roll");
+});
+
+test("un résultat de BitMidi devient une fiche jouable", () => {
+  const fiche = versFiche({ id: 23776, name: "chopin-ballade1.mid", downloadUrl: "/uploads/23776.mid", plays: 10781 });
+  assert.deepEqual(fiche, {
+    id: "bitmidi-23776", titre: "chopin ballade1", compositeur: "BitMidi", oeuvre: "chopin-ballade1.mid",
+    fichier: "https://bitmidi.com/uploads/23776.mid", duree: 0, ecoutes: 10781, enLigne: true,
+  });
+});
+
+test("la recherche interroge BitMidi et ignore les résultats sans fichier", async () => {
+  let adresse;
+  const recuperer = async (url) => {
+    adresse = url;
+    return { ok: true, json: async () => ({ result: { results: [
+      { id: 1, name: "satie-gymnopedie1.mid", downloadUrl: "/uploads/1.mid", plays: 3 },
+      { id: 2, name: "sans-fichier.mid" },
+    ] } }) };
+  };
+  const fiches = await chercher("satie gymnopédie", recuperer);
+  assert.equal(adresse, "https://bitmidi.com/api/midi/search?q=satie%20gymnop%C3%A9die&page=0");
+  assert.deepEqual(fiches.map((f) => f.titre), ["satie gymnopedie1"]);
+  await assert.rejects(chercher("x", async () => ({ ok: false, status: 503 })), /503/);
+});
+
+test("la batterie et les notes hors du clavier ne sont pas jouées", () => {
+  const piste = (channel, notes, percussion = false) => ({
+    channel, instrument: { percussion }, controlChanges: {},
+    notes: notes.map((midi, i) => ({ midi, time: i, duration: 0.5, velocity: 0.7 })),
+  });
+  const m = depuisToneMidi({ tracks: [piste(0, [60, 12, 120]), piste(9, [36, 38]), piste(1, [40], true), piste(2, [48])] });
+  assert.deepEqual(m.notes.map((n) => n.midi).sort(), [48, 60]);
+  assert.deepEqual(m.notes.map((n) => n.main).sort(), [0, 1]);
 });

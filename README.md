@@ -32,6 +32,15 @@ réessaie ; dès que le son revient, le morceau démarre ou reprend là où il s
 est joué **au tempo de sa partition**, changements de mouvement, points d'orgue et ralentis
 compris, avec ses nuances et sa pédale. On peut jouer par-dessus pendant la lecture.
 
+## Rechercher une partition en ligne
+
+La barre de recherche, au-dessus des morceaux, interroge [BitMidi](https://bitmidi.com) (plus de
+100 000 fichiers MIDI). Un clic sur un résultat (ou `↓` puis `Entrée`) le joue aussitôt au piano,
+sans ajouter de bouton : la barre de lecture le contrôle comme les autres morceaux. La batterie
+et les notes hors des 88 touches sont ignorées ; les noms venus d'Internet sont affichés comme du
+texte. La liste de suggestions est celle d'[autoComplete.js](https://tarekraafat.github.io/autoComplete.js/)
+(sans dépendance, fournie dans `vendor/`).
+
 ## Jouer
 
 | Moyen | Comment |
@@ -76,18 +85,19 @@ js/clavier-ordinateur.js   correspondance touches du clavier → notes
 js/morceau.js              préparation des notes, pédale
 js/moteur.js               son (Tone.js)
 js/lecteur.js              lecture automatique
+js/recherche.js            recherche de partitions en ligne (BitMidi)
 js/piano.js                clavier à l'écran
 js/main.js                 interface
 midi/                      les sept morceaux
 samples/salamander/        échantillons du piano
-vendor/                    Tone.js et @tonejs/midi
+vendor/                    Tone.js, @tonejs/midi et autoComplete.js
 tests/piano.test.js        tests unitaires
 ```
 
 ## En local
 
 ```bash
-npm test          # 31 tests (Node.js 20 ou plus récent)
+npm test          # 36 tests (Node.js 20 ou plus récent)
 npm start         # puis ouvrir http://localhost:8080
 ```
 

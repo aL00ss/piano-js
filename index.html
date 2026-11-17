@@ -23,6 +23,10 @@
   </header>
 
   <main>
+    <div class="recherche">
+      <label class="sr" for="recherche">Rechercher une partition de piano en ligne</label>
+      <input class="recherche-champ" id="recherche" type="search" placeholder="Rechercher une partition en ligne : Chopin, Satie, Gymnopédie…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+    </div>
     <h2 class="sr" id="titre-morceaux">Morceaux</h2>
     <ol class="cartes" id="cartes" aria-labelledby="titre-morceaux"></ol>
 
@@ -65,11 +69,12 @@
       · <kbd>Espace</kbd> pédale · <kbd>←</kbd> <kbd>→</kbd> octave · <kbd>Entrée</kbd> lecture/pause · <kbd>Échap</kbd> arrêt
     </p>
     <p>Conçu et développé par <strong>Alexandre Besnier</strong> · <a href="https://github.com/aL00ss/piano-js" rel="noopener">code source</a></p>
-    <p class="sources">Partitions&nbsp;: <a href="https://www.mutopiaproject.org" rel="noopener">Mutopia Project</a> (domaine public ; CC BY-SA 2.5 pour la Sonate au clair de lune). Échantillons&nbsp;: Salamander Grand Piano, Alexander Holm (CC BY 3.0). Son&nbsp;: <a href="https://tonejs.github.io" rel="noopener">Tone.js</a>.</p>
+    <p class="sources">Partitions&nbsp;: <a href="https://www.mutopiaproject.org" rel="noopener">Mutopia Project</a> (domaine public ; CC BY-SA 2.5 pour la Sonate au clair de lune). Échantillons&nbsp;: Salamander Grand Piano, Alexander Holm (CC BY 3.0). Son&nbsp;: <a href="https://tonejs.github.io" rel="noopener">Tone.js</a>. Recherche en ligne&nbsp;: <a href="https://bitmidi.com" rel="noopener">BitMidi</a>, avec <a href="https://tarekraafat.github.io/autoComplete.js/" rel="noopener">autoComplete.js</a>.</p>
   </footer>
 
   <script src="vendor/Tone.js"></script>
   <script src="vendor/Midi.js"></script>
+  <script src="vendor/autoComplete.min.js"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
