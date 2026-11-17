@@ -28,23 +28,51 @@ export class Moteur {
   #enfoncees = new Set();
   #tenues = new Set();
   #pedale = false;
+  #volume = 0.9;
+  #reverberation = 0.2;
   pret = false;
   notesJouees = 0;
+  reconnexions = 0;
 
   constructor(Tone, base = "samples/salamander/") {
     this.#Tone = Tone;
     this.#base = base;
+    this.#construire();
+  }
+
+  /** Crée le contexte audio et la chaîne d'effets (les échantillons déjà décodés sont réutilisés). */
+  #construire() {
+    const Tone = this.#Tone;
     // Latence minimale : la note part dès que la touche est enfoncée.
     Tone.setContext(new Tone.Context({ latencyHint: "interactive", lookAhead: 0 }));
-    this.#sortie = new Tone.Gain(0.9);
+    this.#sortie = new Tone.Gain(this.#volume);
     const compresseur = new Tone.Compressor({ threshold: -16, ratio: 3, attack: 0.004, release: 0.2 });
     this.#analyseur = new Tone.Analyser("waveform", 1024);
     this.#sortie.chain(compresseur, Tone.getDestination());
     compresseur.connect(this.#analyseur);
     this.#bus = new Tone.Gain(1).connect(this.#sortie);
     this.#reverb = new Tone.Reverb({ decay: 2.8, preDelay: 0.012, wet: 1 }).connect(this.#sortie);
-    this.#envoi = new Tone.Gain(0.2).connect(this.#reverb);
+    this.#envoi = new Tone.Gain(this.#reverberation).connect(this.#reverb);
     this.#bus.connect(this.#envoi);
+    if (this.pret) this.#direct = this.#creerSampler(RELACHEMENT).connect(this.#bus);
+  }
+
+  /**
+   * Repart d'un contexte audio neuf. Utile quand la sortie audio change : un contexte créé
+   * sans sortie utilisable (Firefox, par exemple) peut rester suspendu pour toujours.
+   */
+  async reconnecter() {
+    const ancien = this.#Tone.getContext();
+    this.#enfoncees.clear();
+    this.#tenues.clear();
+    this.#construire();
+    if (this.pret) await this.#reverb.ready;
+    this.reconnexions++;
+    try {
+      await Promise.race([ancien.close(), new Promise((fin) => setTimeout(fin, 500))]);
+    } catch {
+      // l'ancien contexte était peut-être déjà fermé
+    }
   }
 
   /** Télécharge et décode les échantillons. `progression(faits, total)` suit l'avancement. */
@@ -151,11 +179,13 @@ export class Moteur {
   // ----------------------------------------------------------------- réglages
 
   set volume(valeur) {
-    this.#sortie.gain.rampTo(Math.min(1.2, Math.max(0, valeur)), 0.05);
+    this.#volume = Math.min(1.2, Math.max(0, valeur));
+    this.#sortie.gain.rampTo(this.#volume, 0.05);
   }
 
   set reverberation(valeur) {
-    this.#envoi.gain.rampTo(Math.min(0.6, Math.max(0, valeur)), 0.05);
+    this.#reverberation = Math.min(0.6, Math.max(0, valeur));
+    this.#envoi.gain.rampTo(this.#reverberation, 0.05);
   }
 
   /** Niveau efficace du signal de sortie (0 = silence). */

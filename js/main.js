@@ -49,7 +49,7 @@ const etat = {
 // ------------------------------------------------------------------ jeu en direct
 
 function attaquer(midi, velocite = 0.75) {
-  moteur.demarrer();
+  reveillerLeSon();
   moteur.attaquer(midi, velocite);
   etat.appuis.set(midi, (etat.appuis.get(midi) ?? 0) + 1);
   piano.allumer(midi, "active");
@@ -223,7 +223,7 @@ async function chargerMorceau(fiche) {
 
 /** Un clic sur un morceau le joue du début à la fin ; un second clic l'arrête. */
 async function choisir(fiche) {
-  moteur.demarrer(); // dans le geste de l'utilisateur
+  reveillerLeSon(); // dans le geste de l'utilisateur
   const demande = ++etat.demande;
   if (etat.courant?.id === fiche.id && lecteur.etat === "lecture") {
     lecteur.arreter();
@@ -236,15 +236,16 @@ async function choisir(fiche) {
   const carte = document.querySelector(`.carte[data-id="${fiche.id}"]`);
   carte.classList.add("charge");
   try {
-    // Si le navigateur refuse d'activer le son (aucune sortie audio, lecture automatique
-    // bloquée), on n'attend pas indéfiniment : on le signale au lieu de rester figé.
-    const son = Promise.race([moteur.demarrer(), new Promise((fin) => setTimeout(fin, 2000))]);
-    const [morceau] = await Promise.all([chargerMorceau(fiche), pianoPret, son]);
+    const [morceau] = await Promise.all([chargerMorceau(fiche), pianoPret]);
     if (demande !== etat.demande) return;
-    if (!moteur.actif) {
-      $("#statut-texte").textContent = "Son bloqué par le navigateur : vérifiez la sortie audio.";
+    // Sans sortie audio utilisable, on ne reste pas figé : le morceau est mis en attente
+    // et démarrera tout seul dès que le son sera revenu.
+    if (!(await essayerLeSon(2000))) {
+      if (demande === etat.demande) sonIndisponible(fiche);
       return;
     }
+    if (demande !== etat.demande) return;
+    son.enAttente = null;
     etat.courant = fiche;
     lecteur.charger(morceau);
     lecteur.jouer(0);
@@ -266,11 +267,102 @@ function majCartes() {
     if (!actuelle) carte.style.removeProperty("--ratio");
   }
   const titre = etat.courant ? `${etat.courant.titre} — ${etat.courant.compositeur}` : "";
-  $("#statut-texte").textContent = { lecture: titre, pause: `En pause · ${titre}`, arret: "Piano prêt" }[lecteur.etat];
+  $("#statut-texte").textContent = son.bloque ? MESSAGE_SANS_SON
+    : { lecture: titre, pause: `En pause · ${titre}`, arret: "Piano prêt" }[lecteur.etat];
+  document.body.classList.toggle("sans-son", son.bloque);
   majBarre();
 }
 
 lecteur.addEventListener("etat", majCartes);
+
+// -------------------------------------------------------------- sortie audio
+// Le piano s'adapte tout seul aux changements de sortie audio (casque branché, sortie
+// changée dans le système…). Si le son ne peut pas démarrer, il le dit, garde le morceau
+// demandé et réessaie ; un contexte audio resté bloqué est remplacé par un neuf.
+
+const MESSAGE_SANS_SON = "Aucune sortie audio utilisable : le son reviendra tout seul dès qu'une sortie sera disponible.";
+const son = { voulu: false, bloque: false, enAttente: null, reprendre: false, verification: null, relancer: false, derniere: 0 };
+const delai = (ms) => new Promise((fin) => setTimeout(fin, ms));
+
+/** À chaque geste : tente de démarrer le son, et relance la vérification s'il manque. */
+function reveillerLeSon() {
+  son.voulu = true;
+  moteur.demarrer().catch(() => {});
+  if (son.bloque) verifierSortie();
+}
+
+/** Vrai si le son tourne, après au plus `attente` millisecondes. */
+async function essayerLeSon(attente = 1500) {
+  if (moteur.actif) return true;
+  await Promise.race([moteur.demarrer().catch(() => {}), delai(attente)]);
+  return moteur.actif;
+}
+
+function sonIndisponible(fiche = null) {
+  if (fiche) son.enAttente = fiche;
+  if (!son.bloque) {
+    son.bloque = true;
+    majCartes();
+  }
+}
+
+function sonRetabli() {
+  if (!son.bloque) return;
+  son.bloque = false;
+  majCartes();
+  if (son.reprendre) {
+    son.reprendre = false;
+    lecteur.reprendre();
+  }
+  if (son.enAttente) {
+    const fiche = son.enAttente;
+    son.enAttente = null;
+    choisir(fiche);
+  }
+}
+
+/**
+ * Vérifie que le son tourne ; sinon réessaie, puis reconstruit le contexte audio. Une
+ * vérification automatique (sans geste ni changement de sortie) reconstruit moins souvent.
+ */
+function verifierSortie(automatique = false) {
+  // Un branchement ou un geste pendant une vérification automatique n'est pas perdu :
+  // une vérification complète suivra.
+  if (son.verification) {
+    if (!automatique) son.relancer = true;
+    return son.verification;
+  }
+  son.verification = (async () => {
+    try {
+      if (await essayerLeSon()) return sonRetabli();
+      if (!moteur.pret || performance.now() - son.derniere < (automatique ? 15000 : 3000)) return sonIndisponible();
+      son.derniere = performance.now();
+      // L'horloge va changer : la lecture est mise en pause pour reprendre au même endroit.
+      if (lecteur.etat === "lecture") {
+        lecteur.pause();
+        son.reprendre = true;
+      }
+      await moteur.reconnecter();
+      if (await essayerLeSon()) sonRetabli();
+      else sonIndisponible();
+    } finally {
+      son.verification = null;
+      if (son.relancer) {
+        son.relancer = false;
+        if (!moteur.actif) verifierSortie();
+      }
+    }
+  })();
+  return son.verification;
+}
+
+navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+  if (son.voulu) verifierSortie();
+});
+// Filet de sécurité : la sortie peut disparaître ou revenir sans événement.
+setInterval(() => {
+  if (son.voulu && moteur.pret && !moteur.actif) verifierSortie(true);
+}, 2000);
 
 // -------------------------------------------------------------- barre de lecture
 
@@ -278,7 +370,7 @@ const barre = $("#lecture-barre");
 let glisse = false; // l'utilisateur déplace le curseur : l'affichage ne le contrarie pas
 
 function basculerLecture() {
-  moteur.demarrer();
+  reveillerLeSon();
   if (lecteur.etat === "lecture") lecteur.pause();
   else if (lecteur.etat === "pause") lecteur.reprendre();
   else if (etat.courant) choisir(etat.courant);
@@ -472,6 +564,8 @@ globalThis.__piano = {
   notesJouees: () => moteur.notesJouees,
   etatLecteur: () => lecteur.etat,
   pause: () => lecteur.pause(),
+  sonBloque: () => son.bloque,
+  reconnexions: () => moteur.reconnexions,
   reprendre: () => lecteur.reprendre(),
   position: () => lecteur.position,
   duree: () => lecteur.duree,
