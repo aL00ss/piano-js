@@ -10,6 +10,25 @@ import { NB_BLANCHES, disposition, formaterDuree, touche } from "./theorie.js";
 const $ = (selecteur) => document.querySelector(selecteur);
 const horloge = () => performance.now() / 1000;
 
+/** Réglages mémorisés d'une visite à l'autre (le navigateur peut refuser le stockage). */
+const preferences = {
+  lire(cle, defaut) {
+    try {
+      const valeur = localStorage.getItem(`piano.${cle}`);
+      return valeur === null ? defaut : JSON.parse(valeur);
+    } catch {
+      return defaut;
+    }
+  },
+  ecrire(cle, valeur) {
+    try {
+      localStorage.setItem(`piano.${cle}`, JSON.stringify(valeur));
+    } catch {
+      // stockage indisponible (navigation privée stricte) : le réglage vaut pour cette visite
+    }
+  },
+};
+
 const moteur = new Moteur(globalThis.Tone);
 const lecteur = new Lecteur(moteur);
 const piano = new Piano($("#clavier"));
@@ -65,11 +84,18 @@ piano.addEventListener("relache", (e) => relacher(e.detail.midi));
 // --------------------------------------------------------- clavier de l'ordinateur
 
 const surUneCommande = (cible) => cible instanceof Element && cible.matches("button, a");
+const surUneGlissiere = (cible) => cible instanceof HTMLInputElement;
 
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === "Escape") {
     lecteur.arreter();
+    return;
+  }
+  if (e.code === "Enter" || e.code === "NumpadEnter") {
+    if (surUneCommande(e.target) || surUneGlissiere(e.target)) return;
+    e.preventDefault();
+    if (!e.repeat) basculerLecture();
     return;
   }
   if (e.code === "Space" && !surUneCommande(e.target)) {
@@ -78,6 +104,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+    if (surUneGlissiere(e.target)) return; // les flèches règlent la glissière qui a le focus
     e.preventDefault();
     if (!e.repeat) changerOctave(e.code === "ArrowLeft" ? -1 : 1);
     return;
@@ -127,6 +154,7 @@ function majEtiquettes() {
 
 $("#disposition").addEventListener("click", () => {
   etat.disposition = etat.disposition === "azerty" ? "qwerty" : "azerty";
+  preferences.ecrire("disposition", etat.disposition);
   majEtiquettes();
 });
 
@@ -201,6 +229,10 @@ async function choisir(fiche) {
     lecteur.arreter();
     return;
   }
+  if (etat.courant?.id === fiche.id && lecteur.etat === "pause") {
+    lecteur.reprendre();
+    return;
+  }
   const carte = document.querySelector(`.carte[data-id="${fiche.id}"]`);
   carte.classList.add("charge");
   try {
@@ -225,17 +257,85 @@ async function choisir(fiche) {
 }
 
 function majCartes() {
-  const lecture = lecteur.etat === "lecture";
+  const actif = lecteur.etat !== "arret";
   for (const carte of document.querySelectorAll(".carte")) {
-    const actuelle = lecture && carte.dataset.id === etat.courant?.id;
+    const actuelle = actif && carte.dataset.id === etat.courant?.id;
     carte.classList.toggle("en-cours", actuelle);
+    carte.classList.toggle("pause", actuelle && lecteur.etat === "pause");
     carte.setAttribute("aria-pressed", String(actuelle));
     if (!actuelle) carte.style.removeProperty("--ratio");
   }
-  $("#statut-texte").textContent = lecture ? `${etat.courant.titre} — ${etat.courant.compositeur}` : "Piano prêt";
+  const titre = etat.courant ? `${etat.courant.titre} — ${etat.courant.compositeur}` : "";
+  $("#statut-texte").textContent = { lecture: titre, pause: `En pause · ${titre}`, arret: "Piano prêt" }[lecteur.etat];
+  majBarre();
 }
 
 lecteur.addEventListener("etat", majCartes);
+
+// -------------------------------------------------------------- barre de lecture
+
+const barre = $("#lecture-barre");
+let glisse = false; // l'utilisateur déplace le curseur : l'affichage ne le contrarie pas
+
+function basculerLecture() {
+  moteur.demarrer();
+  if (lecteur.etat === "lecture") lecteur.pause();
+  else if (lecteur.etat === "pause") lecteur.reprendre();
+  else if (etat.courant) choisir(etat.courant);
+}
+
+function majBarre() {
+  const actif = lecteur.etat !== "arret";
+  $("#lecture").dataset.etat = lecteur.etat;
+  const bouton = $("#lecture-bouton");
+  bouton.disabled = !etat.courant;
+  bouton.setAttribute("aria-label", lecteur.etat === "lecture" ? "Pause" : "Lecture");
+  $("#lecture-titre").textContent = etat.courant ? `${etat.courant.titre} — ${etat.courant.compositeur}` : "Choisissez un morceau";
+  barre.disabled = !actif;
+  $("#lecture-duree").textContent = formaterDuree(etat.courant ? lecteur.duree || etat.courant.duree : 0);
+  if (!actif) {
+    barre.value = 0;
+    $("#lecture-position").textContent = formaterDuree(0);
+  }
+}
+
+$("#lecture-bouton").addEventListener("click", basculerLecture);
+
+barre.addEventListener("input", () => {
+  glisse = true;
+  $("#lecture-position").textContent = formaterDuree((barre.value / 1000) * lecteur.duree);
+});
+barre.addEventListener("change", () => {
+  glisse = false;
+  lecteur.chercher((barre.value / 1000) * lecteur.duree);
+});
+
+const tempo = $("#tempo");
+function appliquerTempo(valeur) {
+  tempo.value = valeur;
+  $("#tempo-valeur").textContent = `${valeur}\u00a0%`;
+}
+tempo.addEventListener("input", () => appliquerTempo(tempo.value));
+tempo.addEventListener("change", () => {
+  lecteur.vitesse = tempo.value / 100; // appliqué au relâchement : la lecture n'est relancée qu'une fois
+  preferences.ecrire("tempo", Number(tempo.value));
+});
+
+const volume = $("#volume");
+function appliquerVolume(valeur) {
+  volume.value = valeur;
+  $("#volume-valeur").textContent = `${valeur}\u00a0%`;
+  moteur.volume = (valeur / 100) * 1.2;
+}
+volume.addEventListener("input", () => {
+  appliquerVolume(volume.value);
+  preferences.ecrire("volume", Number(volume.value));
+});
+
+// Après un réglage à la souris, les flèches reviennent au changement d'octave.
+for (const glissiere of document.querySelectorAll(".glissiere")) {
+  glissiere.addEventListener("pointerup", () => glissiere.blur());
+}
 
 // ------------------------------------------------------------------------- aperçu
 // Sur un petit écran, le clavier dépasse : une réglette permet de s'y déplacer.
@@ -325,6 +425,11 @@ function image() {
     document.querySelector(".carte.en-cours")?.style.setProperty("--ratio", position / lecteur.duree);
     suivre(morceau, position);
   }
+  if (lecteur.etat !== "arret" && !glisse && lecteur.duree) {
+    barre.value = Math.round((position / lecteur.duree) * 1000);
+    const texte = formaterDuree(position);
+    if ($("#lecture-position").textContent !== texte) $("#lecture-position").textContent = texte;
+  }
   requestAnimationFrame(image);
 }
 
@@ -333,8 +438,11 @@ function image() {
 let pianoPret;
 
 async function demarrer() {
-  etat.disposition = await detecterDisposition();
+  etat.disposition = preferences.lire("disposition", null) ?? (await detecterDisposition());
   majEtiquettes();
+  appliquerVolume(preferences.lire("volume", 75));
+  appliquerTempo(preferences.lire("tempo", 100));
+  lecteur.vitesse = tempo.value / 100;
   requestAnimationFrame(image);
 
   pianoPret = moteur.charger((faits, total) => {
@@ -363,6 +471,8 @@ globalThis.__piano = {
   niveau: () => moteur.niveau(),
   notesJouees: () => moteur.notesJouees,
   etatLecteur: () => lecteur.etat,
+  pause: () => lecteur.pause(),
+  reprendre: () => lecteur.reprendre(),
   position: () => lecteur.position,
   duree: () => lecteur.duree,
   vitesse: (valeur) => (lecteur.vitesse = valeur),

@@ -275,3 +275,40 @@ test("la vitesse resserre ou étire les notes sans changer leur ordre", () => {
   assert.ok(Math.abs(programmees[0].duree - 0.2) < 1e-9);
   lecteur.arreter();
 });
+
+test("la pause conserve la position et la reprise repart de là", async () => {
+  const { moteur, doc, programmees } = faussesDependances();
+  const lecteur = new Lecteur(moteur, doc);
+  const etats = [];
+  lecteur.addEventListener("etat", (e) => etats.push(e.detail));
+  lecteur.charger(preparerMorceau([note(60, 0, 0.5), note(62, 2, 0.5), note(64, 4, 0.5)]));
+  lecteur.jouer(0);
+  moteur.temps += 0.12 + 1; // délai de départ, puis une seconde de lecture
+  lecteur.pause();
+  assert.equal(lecteur.etat, "pause");
+  assert.ok(Math.abs(lecteur.position - 1) < 1e-9);
+  moteur.temps += 30; // le temps passe pendant la pause
+  assert.ok(Math.abs(lecteur.position - 1) < 1e-9, "la position ne bouge pas en pause");
+  lecteur.chercher(3.5);
+  assert.equal(lecteur.position, 3.5);
+  programmees.length = 0;
+  lecteur.reprendre();
+  assert.equal(lecteur.etat, "lecture");
+  moteur.temps += 1;
+  await new Promise((r) => setTimeout(r, 60));
+  lecteur.pause();
+  lecteur.reprendre();
+  assert.ok(programmees.some((p) => p.midi === 64), "la reprise joue la suite du morceau");
+  assert.ok(!programmees.some((p) => p.midi === 62), "les notes déjà passées ne sont pas rejouées");
+  assert.deepEqual(etats, ["lecture", "pause", "lecture", "pause", "lecture"]);
+  lecteur.arreter();
+  assert.equal(lecteur.position, 0);
+});
+
+test("pause et reprise sont sans effet quand rien ne joue", () => {
+  const { moteur, doc } = faussesDependances();
+  const lecteur = new Lecteur(moteur, doc);
+  lecteur.pause();
+  lecteur.reprendre();
+  assert.equal(lecteur.etat, "arret");
+});

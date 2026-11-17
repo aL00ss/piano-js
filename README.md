@@ -8,7 +8,7 @@ classiques, du début à la fin.
 
 👉 **Démo en ligne : https://al00ss.github.io/piano-js/**
 
-La page est volontairement sobre : les boutons des morceaux, et le clavier.
+La page est volontairement sobre : les boutons des morceaux, une barre de lecture et le clavier.
 
 ## Les morceaux
 
@@ -22,7 +22,9 @@ La page est volontairement sobre : les boutons des morceaux, et le clavier.
 | 6 | Fantaisie-Impromptu, op. 66 | Chopin | 4:36 |
 | 7 | Prélude en do majeur | Bach | 2:08 |
 
-Un clic sur un bouton lance le morceau ; un second clic (ou `Échap`) l'arrête. Chaque morceau
+Un clic sur un bouton lance le morceau ; un second clic (ou `Échap`) l'arrête. La barre de lecture
+met en pause et reprend (`Entrée`), permet de se déplacer dans le morceau et règle le tempo
+(50 à 150 %) et le volume ; ces réglages et la disposition du clavier sont mémorisés. Chaque morceau
 est joué **au tempo de sa partition**, changements de mouvement, points d'orgue et ralentis
 compris, avec ses nuances et sa pédale. On peut jouer par-dessus pendant la lecture.
 
@@ -33,6 +35,7 @@ compris, avec ses nuances et sa pédale. On peut jouer par-dessus pendant la lec
 | Clavier | deux rangées de touches : `W`…`!` (octave grave) et `A`…`$` (octave aiguë), les touches noires sur la rangée du dessus |
 | Souris, doigts | clic ou toucher, plusieurs doigts à la fois, glissando ; plus on frappe bas sur la touche, plus la note est forte |
 | `Espace` | pédale forte |
+| `Entrée` | lecture / pause du morceau |
 | `←` `→` | changer d'octave |
 | Clavier MIDI | reconnu automatiquement s'il est déjà autorisé dans le navigateur |
 
@@ -80,7 +83,7 @@ tests/piano.test.js        tests unitaires
 ## En local
 
 ```bash
-npm test          # 29 tests (Node.js 20 ou plus récent)
+npm test          # 31 tests (Node.js 20 ou plus récent)
 npm start         # puis ouvrir http://localhost:8080
 ```
 

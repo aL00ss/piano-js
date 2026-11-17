@@ -13,7 +13,7 @@ export class Lecteur extends EventTarget {
   #morceau = null;
   #session = null;
   #minuterie = null;
-  #etat = "arret"; // "arret" | "lecture"
+  #etat = "arret"; // "arret" | "lecture" | "pause"
   #vitesse = 1;
   #origineAudio = 0; // instant audio correspondant à #originePosition
   #originePosition = 0;
@@ -73,9 +73,24 @@ export class Lecteur extends EventTarget {
     if (this.#etat !== "arret") this.#changerEtat("arret");
   }
 
-  /** Saute à une position (en secondes) pendant la lecture. */
+  /** Met la lecture en pause : la position est conservée. */
+  pause() {
+    if (this.#etat !== "lecture") return;
+    const position = this.position;
+    this.#couper();
+    this.#originePosition = position;
+    this.#changerEtat("pause");
+  }
+
+  /** Reprend là où la pause a arrêté la lecture. */
+  reprendre() {
+    if (this.#etat === "pause") this.jouer(this.#originePosition);
+  }
+
+  /** Saute à une position (en secondes) ; en pause, la lecture reprendra de là. */
   chercher(position) {
     if (this.#etat === "lecture") this.jouer(position);
+    else if (this.#etat === "pause") this.#originePosition = Math.max(0, Math.min(position, this.duree));
   }
 
   set vitesse(valeur) {
