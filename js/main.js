@@ -204,8 +204,15 @@ async function choisir(fiche) {
   const carte = document.querySelector(`.carte[data-id="${fiche.id}"]`);
   carte.classList.add("charge");
   try {
-    const [morceau] = await Promise.all([chargerMorceau(fiche), pianoPret, moteur.demarrer()]);
+    // Si le navigateur refuse d'activer le son (aucune sortie audio, lecture automatique
+    // bloquée), on n'attend pas indéfiniment : on le signale au lieu de rester figé.
+    const son = Promise.race([moteur.demarrer(), new Promise((fin) => setTimeout(fin, 2000))]);
+    const [morceau] = await Promise.all([chargerMorceau(fiche), pianoPret, son]);
     if (demande !== etat.demande) return;
+    if (!moteur.actif) {
+      $("#statut-texte").textContent = "Son bloqué par le navigateur : vérifiez la sortie audio.";
+      return;
+    }
     etat.courant = fiche;
     lecteur.charger(morceau);
     lecteur.jouer(0);
